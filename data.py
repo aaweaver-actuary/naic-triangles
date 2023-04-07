@@ -129,4 +129,30 @@ def read_naic_csv(url : str = None, lob : str = None) -> pd.DataFrame:
     
     # return the dataframe and the group code lookup table
     return df, grp_df
+
+def build_cumulative(df : pd.DataFrame) -> pd.DataFrame:
+    """
+    Build cumulative columns for the dev lag columns.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The dataframe to build the cumulative columns for.
+
+    Returns
+    -------
+    df : pd.DataFrame
+        The dataframe with the cumulative columns added.
+    """
+    lobs = ['pers_auto', 'wc', 'comm_auto', 'med_mal', 'products', 'other_liab']
+    dflist = []
+    for lob in lobs:
+        df, _ = read_naic_csv(lob=lob)
+        df['lob'] = lob
+        dflist.append(df)
+    cum_df = pd.concat(dflist)
+    cum_df = cum_df.loc[cum_df.type_of_loss.isin('reported_loss paid_loss'.split())].reset_index(drop=True)
+    cum_df['is_cum'] = 1
+    cum_df = cum_df.set_index('is_cum group_code lob type_of_loss ay ep'.split())
+    cum_df
     
