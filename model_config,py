@@ -1,0 +1,240 @@
+"""
+This module contains the ModelConfig class, which is used to configure the
+hyperparameters of the model. The ModelConfig class is used to instantiate
+a set of hyperparameters for the model, and is passed to the ModelTF class
+or the ModelTorch class.
+
+"""
+
+from dataclasses import dataclass
+from typing import Optional, List, Any
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+
+def package_map(package_string : str):
+    """
+    A function to map the string values to the appropriate package. The
+    default is 'tf' (i.e. TensorFlow). The other option is 'torch' (i.e.
+    PyTorch).
+    """
+    out = {
+      'tf': 'tf'
+      , 'tensorflow': 'tf'
+      , 'keras': 'tf'
+      , 'torch': 'torch'
+      , 'pytorch': 'torch'
+      , 'pt': 'torch'
+       }
+    return out[package_string.lower()]
+
+# map the string values to the appropriate package
+def initialization_map(initialization_string : str = None, package : str = None):
+    """
+    A function to map the string values to the appropriate package. The default
+    package is 'tf' (i.e. TensorFlow). The other option is 'torch' (i.e. PyTorch).
+
+
+
+    """
+    assert initialization_string is not None, "`initialization_string` cannot be None"
+
+    # if no package is provided, default to 'tf'
+    if package is None:
+        package = 'tf'
+
+    # map the string values to the appropriate package
+    normal_map = {'tf': 'random_normal', 'torch': 'normal'}
+    uniform_map = {'tf': 'random_uniform', 'torch': 'uniform'}
+    zeros_map = {'tf': 'zeros', 'torch': 'zeros'}
+
+    out = {'random_normal': normal_map,
+           'normal': normal_map,
+           'random_uniform': uniform_map,
+           'uniform': uniform_map,
+           'n': normal_map,
+           'u': uniform_map,
+           'zeros': zeros_map,
+           'z': zeros_map
+           }
+    return out[initialization_string.lower()]
+
+def activation_map(activation_string : str):
+    relu_map = {'tf': 'relu', 'torch': 'ReLU'}
+    sigmoid_map = {'tf': 'sigmoid', 'torch': 'Sigmoid'}
+    softmax_map = {'tf': 'softmax', 'torch': 'Softmax'}
+    tanh_map = {'tf': 'tanh', 'torch': 'Tanh'}
+    leaky_relu_map = {'tf': 'leaky_relu', 'torch': 'LeakyReLU'}
+
+    out = {
+            'relu': relu_map,
+            'sigmoid': sigmoid_map,
+            'softmax': softmax_map,
+            'tanh': tanh_map,
+            'r': relu_map,
+            's': sigmoid_map,
+            'sm': softmax_map,
+            't': tanh_map,
+            'leaky_relu': leaky_relu_map,
+            }
+    return out[activation_string.lower()]
+
+@dataclass
+class Hidden:
+  """
+  A dataclass to hold the hyperparameters for the hidden layers of the model.
+
+    Attributes
+    ----------
+    package : Optional[str]
+        The package to use for the model. If no value is provided, the default
+        value is 'tf' (i.e. TensorFlow). The other option is 'torch' (i.e.
+        PyTorch).
+    nodes : Optional[List]
+        A list of integers, where each integer represents the number of nodes
+        in each hidden layer. If no value is provided, the default value is
+        2 hidden layers, with 32 nodes in the first layer and 64 nodes in the
+        second layer (i.e. [32, 64]).
+    activation : Optional[str]
+        The activation function to use for the hidden layers. If no value is
+        provided, the default value is 'relu' for TensorFlow models, and
+        'ReLU' for PyTorch models.
+  """
+  package : Optional[str] = 'tf'
+  nodes : Optional[List] = None
+  activation : Optional[str]  = None
+
+  def __post_init__(self):
+      if self.nodes is None:
+        self.nodes = [32, 64]
+
+      if self.activation is None:
+          if package_map[self.package] == 'tf':
+              self.activation = 'relu'
+          elif package_map[self.package] == 'torch':
+            self.activation = 'ReLU'
+
+@dataclass
+class Input:
+    nodes : Optional[int] = None
+
+@dataclass
+class Output:
+    """
+    A dataclass to hold the hyperparameters for the output layer of the model.
+
+        Attributes
+        ----------
+        package : Optional[str]
+            The package to use for the model. If no value is provided, the
+            default value is 'tf' (i.e. TensorFlow). The other option is
+            'torch' (i.e. PyTorch).
+        nodes : Optional[int]
+            The number of nodes in the output layer, corresponding to the
+            number of classes in the dataset. If no value is provided, the
+            default value is 1.
+        activation : Optional[str]
+            The activation function to use for the output layer. If no value
+            is provided, the default value is 'softmax' for TensorFlow models,
+            and 'Softmax' for PyTorch models.
+
+    """
+    package : Optional[str] = 'tf'
+    nodes : Optional[int] = 1
+    activation : Optional[str] = None
+
+def __post_init__(self):
+    # if no value is provided to activation, the default value is
+    # the softmax function for either package
+    if self.activation is None:
+        if package_map[self.package] == 'tf':
+            self.activation = 'softmax'
+        elif package_map[self.package] == 'torch':
+            self.activation = 'Softmax'
+        else:
+            raise ValueError('Invalid value for package. Please choose from '
+                             'tf or torch.')
+
+@dataclass
+class Initial:
+    """
+    A dataclass to hold the hyperparameters for the initialization of the
+    weights and biases of the model.
+
+        Attributes
+    """
+    package : Optional[str] = 'tf'
+    weights : Optional[str] = None
+    bias : Optional[str] = None
+
+    def __post_init__(self):
+        self.package = package_map[self.package]
+
+        # if no value is provided to weights, the default value is
+        # to choose from a random normal distribution for either package
+        if self.weights is None:
+            self.weights = initialization_map['random_normal'][self.package]
+        elif self.weights in initialization_map.keys():
+            self.weights = initialization_map[self.weights][self.package]
+        else:
+            raise ValueError('Invalid value for weights. Please choose from '
+                             'normal, uniform, or zeros.')
+        
+        # if no value is provided to bias, the default value is
+        # to choose from a random normal distribution for either package
+        if self.bias is None:
+            self.bias = initialization_map['random_normal'][self.package]
+
+        # map the string values to the appropriate package
+        elif self.bias in initialization_map.keys():
+            self.bias = initialization_map[self.bias][self.package]
+
+
+
+            
+
+@dataclass
+class ModelConfig:
+    input : Optional[Input] = Input()
+    output : Optional[Output] = Output()
+    hidden : Optional[Hidden] = Hidden()
+    initial : Optional[Initial] = Initial()
+    normalization : Optional[str] = 'none'
+    optimizer : Optional[str] = 'rmsprop'
+    learning_rate : Optional[float] = 0.001
+    regularizer : Optional[Any] = None
+    dropout : Optional[float] = 0.0
+    epochs : Optional[int] = 10
+    batch_size : Optional[int] = 16
+    train_split : Optional[float] = None
+    validation_split : Optional[float] = None
+    test_split : Optional[float] = None
+    preprocessor : Optional[Any] = StandardScaler()
+    verbose : Optional[bool] = 1
+    loss_function : Optional[str] = 'categorical_crossentropy'
+    metrics : Optional[List] = None
+
+    def __post_init__(self):
+
+      if self.metrics is None:
+        
+        self.metrics = ['accuracy']
+      
+      self.tvt = (self.train_split, self.validation_split, self.test_split)
+
+      if ((self.train_split is None) &
+          (self.validation_split is None) &
+          (self.test_split is None)):
+        self.train_split = 0.6
+        self.validation_split=0.2
+        self.test_split = 0.2
+      else:
+        x = ((1 if self.train_split is not None else 0) +
+          (1 if self.validation_split is not None else 0) +
+          (1 if self.test_split is not None else 0))
+        errormsg = f"`train_split`: {self.train_split}\n"
+        errormsg += f"`validation_split`: {self.validation_split}\n"
+        errormsg += f"`test_split`: {self.test_split}\n"
+        errormsg += "either specify all of (train, val, test) "
+        errormsg += "or specify none of (train, val, test)"
+
+        assert x==3, errormsg

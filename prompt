@@ -1,0 +1,31 @@
+Design a pytorch convolutional neural network to classify labeled loss triangles from a labeled dataset of classes 1 and 0. The model will have the following features:
+
+1. specifies the minimum number of user inputs to populate all the hyperparameters of the model
+    1. any hyperparameters that are not specified by the user should be set to default values or ideally calculated based on the data
+2. Preprocessing:
+    1. data are currently in a dataframe with 13 columns: triangle_id, is_cum, ay, and 10 other columns of loss data. The data are in a wide format, with each row representing a triangle_id/ay combo and the columns representing the age of the loss. There are many nan values in the data that need to be removed, and the data need to be normalized.
+    2. response variable is is_cum
+    3. data are the columns of aged loss data
+    4. ay can be dropped as it is not needed for the model
+    5. a individual observation is a triangle_id, with the label for that triangle_id being the value of is_cum for the last ay in the triangle, and the data being the matrix contianed in the columns of aged loss data
+    6. normalize the data in the matrices accross the rows so that each row has a mean of 0 and a standard deviation of 1
+    7. separate the data into numpy matrices for the data and the labels for each observation (triangle_id)
+    8. reshape the data as needed for the CNN/remove nan values as needed
+    9. split the data into training and testing sets:
+        1. 60% of the data should be used for training
+        2. 20% of the data should be used for validation
+        3. 20% of the data should be used for testing
+3. Input:
+    1. CNN comes from pytorch
+    2. basic CNN model should be similar to standard image classification CNNs (since we are using nearly square matrices as input)
+    3. CNN is implemented with the class structure that inherits from the pytorch nn.Module class
+    4. CNN has a straightforward architecture with 3 convolutional layers, 3 max pooling layers, and 2 fully connected layers since this is the first iteration of the model
+    5. add a dropout layer after each fully connected layer
+    6. add a batch normalization layer after each convolutional layer
+    7. use leaky relu activation function after each convolutional layer
+4. after each epoch, the model should print the training loss and validation loss
+5. implemented using modular design principles so that the model can be easily modified in the future
+6. output of the model is the predicted probability of the label for each observation in the test set
+    1. thus will want to pass through a sigmoid function to get the predicted probability
+
+Please provide a step-by-step explanation and code snippets for implementing each feature in the CNN model, as well as the overall design and structure of the code. Each step should be a single method in the overall class structure, and code snippets should be provided for each method. Make the hyperparameters all be controlled by the user, and make sure that the model can be easily modified in the future.

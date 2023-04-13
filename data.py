@@ -262,9 +262,24 @@ class NAICtriangles:
         # join the triangle_id to the naic_df to get the triangle_id column
         self.naic_df = self.naic_df.merge(self.tri_df[['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']], on=['group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar'])
 
-        self.naic_df = self.naic_df.set_index(['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']).drop(columns='ay ep'.split())
+        self.naic_df = self.naic_df.set_index(['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']).drop(columns='ep')
         # self.cnn_df = self.naic_df.set_index('triangle_id').drop(columns='group_code lob type_of_loss is_cum is_dollar'.split())
         # self.cnn_df = self.cnn_df.to_dict(orient='index')
+
+        # ensure that when ay + dev_lag <= max(ay) + dev_lag[0], the value is not NA -- set to 0
+        # this does not apply on the bottom half of the triangle -- eg where ay + dev_lag > max(ay) + dev_lag[0]
+        # in this case the value should be NA
+        self.naic_df = self.naic_df.reset_index()
+        self.naic_df = self.naic_df.melt(id_vars='triangle_id group_code lob type_of_loss is_cum is_dollar ay'.split(), var_name='dev_lag', value_name='value')
+        self.naic_df = self.naic_df.assign(ay=lambda x: x.ay.astype(int))
+        self.naic_df = self.naic_df.assign(dev_lag=lambda x: x.dev_lag.astype(int))
+        self.naic_df = self.naic_df.assign(max_ay=lambda x: x.groupby(['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']).ay.transform(max))
+        self.naic_df = self.naic_df.assign(first_dev_lag=lambda x: x.groupby(['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']).dev_lag.transform(min))
+        self.naic_df = self.naic_df.assign(is_na=lambda x: (x.ay + x.dev_lag) > (x.max_ay + x.first_dev_lag))
+        self.naic_df = self.naic_df.assign(value=lambda x: np.where(x.is_na, np.nan, x.value))
+        self.naic_df = self.naic_df.drop(columns='max_ay first_dev_lag is_na'.split())
+        self.naic_df = self.naic_df.pivot_table(index='triangle_id group_code lob type_of_loss is_cum is_dollar ay'.split(), columns='dev_lag', values='value')
+
 
 
         
