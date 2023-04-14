@@ -10,6 +10,9 @@
 import pandas as pd
 import numpy as np
 
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+
 import tensorflow as tf
 import tensorflow.keras as keras
 
@@ -178,8 +181,6 @@ class BaseModel(ABC):
         self.config = config
         self.X = X
         self.y = y
-        self.cv = cv
-        self.k = k
 
         self.model = None
         self.optimizer = None
@@ -206,18 +207,11 @@ class BaseModel(ABC):
 
 class TFModel(BaseModel):
     def __init__(self, config=None, X=None, y=None, cv=True, k=3, name=None):
+        super().__init__(config, X, y, cv, k)
         self.config = config if config else ModelConfig()
         self.X = X if X is not None else np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
         self.y = y if y is not None else np.array([1, 1, 1])
-        self.cv = cv
-        self.k = k
-        self.name = name
-        self.model = None
-        self.optimizer = None
-        self.compiled = False
-        self.accuracy_measures = None
-        self.fit = None
-        self.fitted = None
+        
 
         if self.model is None:
             self.model = tf.keras.models.Sequential(name=self.name)
@@ -246,7 +240,6 @@ class TFModel(BaseModel):
 
         # add groups for cross validation if needed:
         temp = self.X_train.copy()
-        self.cv_gp = cv_shuffle(temp, self.k)
 
         # fit standard scaler on X_train, apply to train, val, test
         self.scaler = StandardScaler()
@@ -326,9 +319,6 @@ class TFModel(BaseModel):
             self.model.summary()
         else:
             print('No model has been compiled. Run .compile_model() to compile.')
-
-    # def cross_validation(self, k=3, verbose=0):
-        # skip cross validation for now
 
     @abstractmethod
     def fit_model(self, verbose=None):
@@ -436,184 +426,22 @@ class TorchModel(BaseModel):
             if verbose and (epoch + 1) % verbose == 0:
                 print(f'Epoch {epoch + 1}/{self.config.epochs}, Loss: {epoch_loss / len(train_loader):.6f}')
 
-
-
-
-
-
-
-@dataclass
-class Model:
-  config : Optional[Any] = ModelConfig()
-  X : Optional[Any] = np.array([[1,2,3],[4,5,6],[7,8,9]])
-  y : Optional[Any] = np.array([1,1,1])
-  cv : Optional[bool] = True
-  k : Optional[int] = 3
-  
-  name : Optional[str] = None
-  model : Optional[Any] = None
-  optimizer : Optional[Any] = None
-  compiled : Optional[bool] = False
-  accuracy_measures : Optional[dict] = None
-  fit : Optional[Any] = None
-  fitted : Optional[Any] = None
-
-  def __post_init__(self):
-    X_train, y_train = None, None
-    X_val, y_val = None, None
-    X_test, y_test = None, None
-
-    if self.model is None:
-      self.model = tf.keras.models.Sequential(name=self.name)
-
-    if self.accuracy_measures is None:
-      self.accuracy_measures = ['accuracy']
-
-  def preprocess_data(self):
-    # dummy vars for levels of the target
-    self.y = pd.get_dummies(self.y)
-
-    # split test set
-    x1, self.X_test, y1, self.y_test = train_test_split(self.X,
-                                                        self.y,
-                                                        stratify=self.y,
-                                                        test_size = self.config.test_split)
-    
-    # split train/val sets
-    self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(
-        x1,
-        y1,
-        stratify=y1,
-        # split train/val from remaining data
-        test_size = self.config.validation_split / (1 -self.config.test_split)
-    )
-
-    # add groups for cross validation if needed:
-    temp = self.X_train.copy()
-    self.cv_gp = cv_shuffle(temp, self.k)
-
-    # fit standard scaler on X_train, apply to train, val, test
-    self.scaler = StandardScaler()
-    self.scaler.fit(self.X_train)
-    self.X_train = self.scaler.transform(self.X_train)
-    self.X_val = self.scaler.transform(self.X_val)
-    self.X_test = self.scaler.transform(self.X_test)
-
-  def _add_layer(self, layer : int):
-    self.model.add(
-        keras.layers.Dense(
-            self.config.hidden.nodes[layer],
-            input_shape=(self.X.shape[1],),
-            name=f"Dense-Layer-{layer}",
-            kernel_initializer=self.config.initial.weights,
-            bias_initializer=self.config.initial.bias,
-            kernel_regularizer=self.config.regularizer,
-            activation=self.config.hidden.activation))
-    
-  def _add_batch_normalization(self):
-    if(self.config.normalization == 'batch'):
-          self.model.add(keras.layers.BatchNormalization())
-
-  def _add_dropout(self):
-    if(self.config.dropout > 0.0):
-          self.model.add(keras.layers.Dropout(self.config.dropout))
-
-  def _get_optimizer(self):
-    opts={
-        'sgd': keras.optimizers.SGD(learning_rate=self.config.learning_rate)
-        , 'rmsprop': keras.optimizers.RMSprop(learning_rate=self.config.learning_rate)
-        , 'adam': keras.optimizers.Adam(learning_rate=self.config.learning_rate)
-        , 'adagrad': keras.optimizers.Adagrad(learning_rate=self.config.learning_rate)
-    }
-    self.optimizer = opts[self.config.optimizer]
-
-
-  def build_model(self):
-    # loop through hidden nodes defined in config
-    for layer in range(len(self.config.hidden.nodes)):
-      
-      # nothing to normalize/dropout for 1st hidden layer
-      if layer==0: 
-        self._add_layer(layer)
-      
-      # add batch normalization / dropout if indicated
-      # to the hidden layers after the first
-      else: 
-        self._add_batch_normalization()
-        self._add_dropout()
-        self._add_layer(layer)
-
-    # output layer
-    self.model.add(keras.layers.Dense(
-        self.config.output.nodes,
-        name='Output-Layer',
-        activation=self.config.output.activation
-        )
-    )
-
-    # optimizer
-    if self.optimizer is None:
-      self._get_optimizer()
-
-  def compile_model(self):
-    if self.optimizer is None:
-      self.build_model()
-    self.model.compile(
-        loss=self.config.loss_function,
-        optimizer=self.optimizer,
-        metrics=self.config.metrics
-    )
-    self.compiled = True
-
-  def summary(self):
-    if self.compiled:
-      self.model.summary()
-    else:
-      print('No model has been compiled. Run .compile_model() to compile.')
-
-  def cross_validation(self, k=3, verbose=0):
-    assert self.compiled, "Model has not been compiled yet."
-    self.cv_fit = {}
-    self.k = k
-    print("************ CROSS VALIDATION *********************************\n")
-    for k0 in range(1, self.k+1):
-      
-      temp_name = f"{name}-fold-{k0}"
-      
-      print(f"Fitting {temp_name}")
-      # self.cv_fit[temp_name] = {}
-      # self.cv_fit['name'] = temp_name
-      self.cv_fit[temp_name] = self.model.fit(
-        pd.DataFrame(self.X_train).reset_index(drop=True).loc[pd.Series(self.cv_gp).reset_index(drop=True).ne(k0), :].to_numpy(),
-        pd.DataFrame(self.y_train).reset_index(drop=True).loc[pd.Series(self.cv_gp).reset_index(drop=True).ne(k0), :].to_numpy(),
-        batch_size=self.config.batch_size,
-        epochs=self.config.epochs,
-        verbose=verbose if verbose is not None else self.config.verbose,
-        validation_data=(
-            pd.DataFrame(self.X_train).reset_index(drop=True).loc[pd.Series(self.cv_gp).reset_index(drop=True).eq(k0), :].to_numpy(),
-            pd.DataFrame(self.y_train).reset_index(drop=True).loc[pd.Series(self.cv_gp).reset_index(drop=True).eq(k0), :].to_numpy())
-        )
-    print("")
-      
-  def fit_model(self, verbose=None):
-    assert self.compiled, "Model has not been compiled yet."
-    self.fitted = self.model.fit(
-        self.X_train,
-        self.y_train,
-        batch_size=self.config.batch_size,
-        epochs=self.config.epochs,
-        verbose=verbose if verbose is not None else self.config.verbose,
-        validation_data=(self.X_val, self.y_val))
     
 @dataclass
-class HyperparameterTuning(Model):
+class TorchHyperParameterTuning(TorchModel):
+    package : str = 'torch'
     ### this is where the different tests, such as batch size, optimizer, etc. go
-
-# What do I need to do to make the model fit method work with both tensorflow and pytorch?
-# Please feel free to add classes, methods, and attributes as you see fit. Ask me questions if you need some clarification.
 
 
     batch_size_list : Optional[list] = None
+    optimizer_list : Optional[list] = None
+    learning_rate_list : Optional[list] = None
+    hidden_nodes_list : Optional[list] = None
+    hidden_activation_list : Optional[list] = None
+    output_activation_list : Optional[list] = None
+    dropout_list : Optional[list] = None
+    epochs_list : Optional[list] = None
+    
 
     def __post_init__(self):
         if self.batch_size_list is None:
@@ -632,9 +460,14 @@ class HyperparameterTuning(Model):
                 # new model instance
                 name = f"Batch-Size-{batch_size}"
                 # print(f'name: {name}')
-                batch_models[name] = Model(X=iris.drop(columns='species'),
-                                            y=iris.species,
-                                            name=name)
+                if self.package == 'torch':
+                    batch_models[name] = TorchModel(X=iris.drop(columns='species'),
+                                                    y=iris.species,
+                                                    name=name)
+                elif self.package == 'tf':
+                    batch_models[name] = TFModel(X=iris.drop(columns='species'),
+                                                 y=iris.species,
+                                                 name=name)
 
                 # set batch size/epochs
                 batch_models[name].config.batch_size = batch_size
