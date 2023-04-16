@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from typing import Function, Optional, Any
+from typing import Any
 
 class LossTriangleClassifier(nn.Module):
     """
@@ -187,8 +187,8 @@ class LossTriangleClassifier(nn.Module):
                  , linear_nodes : list = [512, 256]
                  , linear_dropout : list = [0.4, 0.2]
                  , relu_neg_slope : float = 0.1
-                 , activation : Function = None
-                 , output_activation : Function = lambda x: F.softmax(x, dim=1)
+                 , activation : Any = None
+                 , output_activation : Any = lambda x: F.softmax(x, dim=1)
                  ):
         # Call the parent class's constructor
         super(LossTriangleClassifier, self).__init__()
