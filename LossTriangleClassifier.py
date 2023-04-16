@@ -154,27 +154,6 @@ class LossTriangleClassifier(nn.Module):
             The default value is a lambda function that applies softmax to the
             output of the network. This is used to convert the output of the
             network into a probability distribution over the classes.
-
-    Attributes:
-    -----------
-        activation: function
-            The activation function to use in the network. This should be a
-            function that takes a tensor as input and returns a tensor as
-            output.
-        output_activation: function 
-            The activation function to use in the output layer. This should be
-            a function that takes a tensor as input and returns a tensor as
-            output.
-        convolution_layers: nn.ModuleList
-            The convolutional layers in the network. This is a list of PyTorch
-            convolutional layers, and is built layer by layer in the `__init__`
-            method.
-        batch_normalization_layers: nn.ModuleList
-            The batch normalization layers in the network. This is a list of
-
-
-
-
     """
     def __init__(self,
                  input_shape : tuple
