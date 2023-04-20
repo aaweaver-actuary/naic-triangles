@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
+
 class LossTriangleDataset(Dataset):
     """
     LossTriangleDataset class
@@ -90,6 +91,21 @@ class LossTriangleDataset(Dataset):
         dataframe : pd.DataFrame
             The dataframe containing the loss triangle data.
         """
+        # (1) Load the Triangle class from triangles.py
+        import requests
+
+        url = "https://raw.githubusercontent.com/aaweaver-actuary/rocky3/master/rocky3/triangles.py"
+        triangles_script = requests.get(url).text
+        exec(triangles_script)
+
+        # (2) Loop through triangle_ids and create Triangle objects
+        triangle_objects = {}
+        for triangle_id in dataframe['triangle_id'].unique():
+            triangle_objects[triangle_id] = Triangle(dataframe[dataframe['triangle_id'] == triangle_id])
+
+        # (3) Calculate vwa age-to-ult for each triangle
+        dataframe['vwa_age_to_ult'] = dataframe['triangle_id'].apply(lambda x: triangle_objects[x].atu('vwa'))
+
         # Drop ay column
         dataframe = dataframe.drop('ay', axis=1)
 
@@ -137,6 +153,23 @@ class LossTriangleDataset(Dataset):
         # Convert data and labels to numpy arrays
         data = np.stack(data, axis=0)
         labels = np.array(labels)
+
+        # (4) Add vwa_age_to_ult as an additional feature
+        vwa_age_to_ult_data = np.stack([dataframe[dataframe['triangle_id'] == triangle_id]['vwa_age_to_ult'].values for triangle_id in dataframe['triangle_id'].unique()], axis=0)
+
+        # Create a separate scaler for vwa_age_to_ult_data
+        vwa_scaler = StandardScaler()
+
+        # Normalize vwa_age_to_ult_data
+        vwa_age_to_ult_data = vwa_scaler.fit_transform(vwa_age_to_ult_data)
+
+        # Zero-padding
+        padded_vwa_age_to_ult_data = np.zeros((vwa_age_to_ult_data.shape[0], max_rows))
+        for idx, row_data in enumerate(vwa_age_to_ult_data):
+            padded_vwa_age_to_ult_data[idx, :max_rows - idx] = row_data[:max_rows - idx]
+
+        # Add the vwa_age_to_ult_data as a new channel to the data
+        data = np.concatenate((data, np.expand_dims(padded_vwa_age_to_ult_data, axis=1)), axis=1)
 
         # Check if there are any "nan" or infinite values in the data and labels
         assert not np.isnan(data).any(), "Data contains 'nan' values"
