@@ -94,7 +94,7 @@ class LossTriangleDataset(Dataset):
         # (1) Load the Triangle class from triangles.py
         import requests
 
-        url = "https://raw.githubusercontent.com/aaweaver-actuary/rocky3/master/rocky3/triangles.py"
+        url = "https://raw.githubusercontent.com/aaweaver-actuary/rocky3/master/rocky3/Triangle.py"
         triangles_script = requests.get(url).text
         exec(triangles_script)
 
