@@ -92,11 +92,12 @@ class LossTriangleDataset(Dataset):
             The dataframe containing the loss triangle data.
         """
         # (1) Load the Triangle class from triangles.py
-        import requests
+        # import requests
 
-        url = "https://raw.githubusercontent.com/aaweaver-actuary/rocky3/main/rocky3/triangle.py?token=GHSAT0AAAAAAB7HYE6QZFXMP566TYKVEOQGZCBCM3A"
-        triangles_script = requests.get(url).text
-        exec(triangles_script)
+        # triurl = "https://raw.githubusercontent.com/aaweaver-actuary/rocky3/main/rocky3/triangle.py?token=GHSAT0AAAAAAB7HYE6QZFXMP566TYKVEOQGZCBCM3A"
+        # ulilurl = "https://raw.githubusercontent.com/aaweaver-actuary/rocky3/main/rocky3/utils.py?token=GHSAT0AAAAAAB7HYE6RFYGZH76XSNMXDZEQZCBCOJQ"
+        # triangles_script = requests.get(triurl).text
+        # exec(triangles_script)
 
         # (2) Loop through triangle_ids and create Triangle objects
         triangle_objects = {}
