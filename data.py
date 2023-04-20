@@ -170,6 +170,52 @@ class NAICtriangles:
         cum_df = cum_df.loc[cum_df.type_of_loss.isin('reported_loss paid_loss'.split())].reset_index(drop=True)
         cum_df['is_cum'] = 1
         cum_df = cum_df.set_index('is_cum group_code lob type_of_loss ay ep'.split())
+
+        # want to drop any triangle (eg is_cum group_code lob type_of_loss combo) where the number of 0s is greater than 10% of the number of data points
+        # so in a 10x10 triangle, with 55 data points, if there are more than 5 0s, then drop the triangle
+        test = (cum_df
+                
+                # drop columns not used to ID the triangle
+                .reset_index()
+                .drop(columns='ay ep'.split())
+                
+                # melt the dataframe
+                .melt(id_vars='is_cum group_code lob type_of_loss'.split(), var_name='dev', value_name='loss')
+                
+                # drop the development lag column since it is not used to ID the triangle
+                .drop(columns='dev')
+                
+                # drop nan values (since I specifically want to count the number of 0s)
+                .dropna())
+        
+        # count the number of 0s in each triangle
+        test = (test
+                
+                # indicate if the loss is 0
+                .assign(loss=lambda x: x.loss.eq(0).astype(int))
+                
+                # group by the triangle and count the number of 0s
+                .groupby('is_cum group_code lob type_of_loss'.split())
+                
+                # use sum since the loss column is 1 if the loss is 0 and 0 if the loss is not 0
+                .sum()
+                .reset_index())
+        
+        # add a column indicating if the triangle should be dropped (if the number of 0s
+        # is greater than 10% of the number of data points)
+        test['is_error'] = test.loss.ge(.1 * 55)
+
+        # create a new dataframe with the triangles that should not be dropped
+        clean_cum = test.loc[~test.is_error].reset_index(drop=True).drop(columns='loss is_error'.split())
+
+        # merge the clean_cum dataframe with the cum_df dataframe with a left join so that
+        # only the triangles that should not be dropped are kept
+        cum_df = (clean_cum
+                  .merge(cum_df.reset_index()
+                         , on='is_cum group_code lob type_of_loss'.split()
+                         , how='left')
+                  .set_index('is_cum group_code lob type_of_loss ay ep'.split())
+        )
         
         self.cum = cum_df
 
@@ -220,66 +266,76 @@ class NAICtriangles:
         -------
         None
         """
-        # build cumulative and incremental dataframes
-        self.build_incremental()
+        # build cumulative 
+        self.build_cumulative()
 
-        # concatenate the cumulative and incremental dataframes
-        self.naic_df = pd.concat([self.cum, self.incr])
+        # count the number of 0s in the cumulative dataframe, excl is_cum, group_code, lob, type_of_loss, ay, ep
+        print('Counting the number of 0s in the cumulative dataframe...')
+        cum_zero_count = self.cum.loc[:, [1,2,3,4,5,6,7,8,9,10]].eq(0).sum(axis=1).sum()
+        if cum_zero_count < 0.2 * 55: # 55 is the number of datapoints in a 10x10 triangle
+            print('WARNING: More than 20% of the cumulative data is 0.')
+        else:
 
-        # add a column to indicate if the data is in dollars or loss ratio
-        self.naic_df['is_dollar'] = 1
+            # incremental dataframe:
+            self.build_incremental()
 
-        print('Building loss ratio dataframes...')
-        # store the earned premium column
-        self.ep = pd.DataFrame({'ep':self.naic_df.reset_index().ep.values}, index=self.naic_df.index)
-        
-        # build the loss ratio dataframes
-        lr_df = self.naic_df.copy()
+            # concatenate the cumulative and incremental dataframes
+            self.naic_df = pd.concat([self.cum, self.incr])
 
-        # loop through the columns and divide by the earned premium
-        for c in self.naic_df.columns.tolist():
-            lr_df[c] = self.naic_df[c] / self.ep.ep
+            # add a column to indicate if the data is in dollars or loss ratio
+            self.naic_df['is_dollar'] = 1
 
-        # set the is_dollar column to 0
-        lr_df['is_dollar'] = 0
+            print('Building loss ratio dataframes...')
+            # store the earned premium column
+            self.ep = pd.DataFrame({'ep':self.naic_df.reset_index().ep.values}, index=self.naic_df.index)
+            
+            # build the loss ratio dataframes
+            lr_df = self.naic_df.copy()
 
-        # concatenate the loss ratio dataframes
-        self.naic_df = pd.concat([self.naic_df, lr_df])
+            # loop through the columns and divide by the earned premium
+            for c in self.naic_df.columns.tolist():
+                lr_df[c] = self.naic_df[c] / self.ep.ep
 
-        # reset the index
-        self.naic_df.reset_index(inplace=True)
+            # set the is_dollar column to 0
+            lr_df['is_dollar'] = 0
 
-        # drop ay, ep, and the dev lag columns, drop duplicates, and set a triangle_id
-        self.tri_df = (self.naic_df
-                        .drop(columns='ay ep'.split() + [c for c in self.cum.columns.tolist() if c != 'ep'])
-                        .drop_duplicates()
-                        .reset_index(drop=True)
-                        .assign(triangle_id=lambda x: x.index)
-                        )
-        
-        # create dataset for the convolutional neural network:
-        # dictionary of matrices from naic_df with key = triangle_id
-        # join the triangle_id to the naic_df to get the triangle_id column
-        self.naic_df = self.naic_df.merge(self.tri_df[['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']], on=['group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar'])
+            # concatenate the loss ratio dataframes
+            self.naic_df = pd.concat([self.naic_df, lr_df])
 
-        self.naic_df = self.naic_df.set_index(['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']).drop(columns='ep')
-        # self.cnn_df = self.naic_df.set_index('triangle_id').drop(columns='group_code lob type_of_loss is_cum is_dollar'.split())
-        # self.cnn_df = self.cnn_df.to_dict(orient='index')
+            # reset the index
+            self.naic_df.reset_index(inplace=True)
 
-        # ensure that when ay + dev_lag <= max(ay) + dev_lag[0], the value is not NA -- set to 0
-        # this does not apply on the bottom half of the triangle -- eg where ay + dev_lag > max(ay) + dev_lag[0]
-        # in this case the value should be NA
-        self.naic_df = self.naic_df.reset_index()
-        self.naic_df = self.naic_df.melt(id_vars='triangle_id group_code lob type_of_loss is_cum is_dollar ay'.split(), var_name='dev_lag', value_name='value')
-        self.naic_df = self.naic_df.assign(ay=lambda x: x.ay.astype(int))
-        self.naic_df = self.naic_df.assign(dev_lag=lambda x: x.dev_lag.astype(int))
-        self.naic_df = self.naic_df.assign(max_ay=lambda x: x.groupby(['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']).ay.transform(max))
-        self.naic_df = self.naic_df.assign(first_dev_lag=lambda x: x.groupby(['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']).dev_lag.transform(min))
-        self.naic_df = self.naic_df.assign(is_na=lambda x: (x.ay + x.dev_lag) > (x.max_ay + x.first_dev_lag))
-        self.naic_df = self.naic_df.assign(value=lambda x: np.where(x.is_na, np.nan, x.value))
-        self.naic_df = self.naic_df.drop(columns='max_ay first_dev_lag is_na'.split())
-        self.naic_df = self.naic_df.pivot_table(index='triangle_id group_code lob type_of_loss is_cum is_dollar ay'.split(), columns='dev_lag', values='value')
+            # drop ay, ep, and the dev lag columns, drop duplicates, and set a triangle_id
+            self.tri_df = (self.naic_df
+                            .drop(columns='ay ep'.split() + [c for c in self.cum.columns.tolist() if c != 'ep'])
+                            .drop_duplicates()
+                            .reset_index(drop=True)
+                            .assign(triangle_id=lambda x: x.index)
+                            )
+            
+            # create dataset for the convolutional neural network:
+            # dictionary of matrices from naic_df with key = triangle_id
+            # join the triangle_id to the naic_df to get the triangle_id column
+            self.naic_df = self.naic_df.merge(self.tri_df[['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']], on=['group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar'])
+
+            self.naic_df = self.naic_df.set_index(['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']).drop(columns='ep')
+            # self.cnn_df = self.naic_df.set_index('triangle_id').drop(columns='group_code lob type_of_loss is_cum is_dollar'.split())
+            # self.cnn_df = self.cnn_df.to_dict(orient='index')
+
+            # ensure that when ay + dev_lag <= max(ay) + dev_lag[0], the value is not NA -- set to 0
+            # this does not apply on the bottom half of the triangle -- eg where ay + dev_lag > max(ay) + dev_lag[0]
+            # in this case the value should be NA
+            self.naic_df = self.naic_df.reset_index()
+            self.naic_df = self.naic_df.melt(id_vars='triangle_id group_code lob type_of_loss is_cum is_dollar ay'.split(), var_name='dev_lag', value_name='value')
+            self.naic_df = self.naic_df.assign(ay=lambda x: x.ay.astype(int))
+            self.naic_df = self.naic_df.assign(dev_lag=lambda x: x.dev_lag.astype(int))
+            self.naic_df = self.naic_df.assign(max_ay=lambda x: x.groupby(['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']).ay.transform(max))
+            self.naic_df = self.naic_df.assign(first_dev_lag=lambda x: x.groupby(['triangle_id', 'group_code', 'lob', 'type_of_loss', 'is_cum', 'is_dollar']).dev_lag.transform(min))
+            self.naic_df = self.naic_df.assign(is_na=lambda x: (x.ay + x.dev_lag) > (x.max_ay + x.first_dev_lag))
+            self.naic_df = self.naic_df.assign(value=lambda x: np.where(x.is_na, np.nan, x.value))
+            self.naic_df = self.naic_df.drop(columns='max_ay first_dev_lag is_na'.split())
+            self.naic_df = self.naic_df.pivot_table(index='triangle_id group_code lob type_of_loss is_cum is_dollar ay'.split(), columns='dev_lag', values='value')
 
 
 
-        
+            
