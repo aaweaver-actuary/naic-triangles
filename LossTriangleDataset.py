@@ -102,7 +102,14 @@ class LossTriangleDataset(Dataset):
         # (2) Loop through triangle_ids and create Triangle objects
         triangle_objects = {}
         for triangle_id in dataframe['triangle_id'].unique():
-            triangle_objects[triangle_id] = Triangle(dataframe[dataframe['triangle_id'] == triangle_id])
+            ay = dataframe[dataframe['triangle_id'] == triangle_id]['ay']
+            tri_df = dataframe[dataframe['triangle_id'] == triangle_id].copy().loc[:, [1,2,3,4,5,6,7,8,9.10]]
+            tri_df = tri_df.set_index(ay)
+
+            # temp csv file
+            tri_df.to_csv('temp.csv', index=True, header=True)
+            
+            triangle_objects[triangle_id] = Triangle.from_csv('temp.csv', id='paid_loss', origin_columns=1)
 
         # (3) Calculate vwa age-to-ult for each triangle
         dataframe['vwa_age_to_ult'] = dataframe['triangle_id'].apply(lambda x: triangle_objects[x].atu('vwa'))
