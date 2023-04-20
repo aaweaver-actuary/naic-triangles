@@ -99,20 +99,20 @@ class LossTriangleDataset(Dataset):
         # triangles_script = requests.get(triurl).text
         # exec(triangles_script)
 
-        # (2) Loop through triangle_ids and create Triangle objects
-        triangle_objects = {}
-        for triangle_id in dataframe['triangle_id'].unique():
-            ay = dataframe[dataframe['triangle_id'] == triangle_id]['ay']
-            tri_df = dataframe[dataframe['triangle_id'] == triangle_id].copy().loc[:, [1,2,3,4,5,6,7,8,9.10]]
-            tri_df = tri_df.set_index(ay)
+        # # (2) Loop through triangle_ids and create Triangle objects
+        # triangle_objects = {}
+        # for triangle_id in dataframe['triangle_id'].unique():
+        #     ay = dataframe[dataframe['triangle_id'] == triangle_id]['ay']
+        #     tri_df = dataframe[dataframe['triangle_id'] == triangle_id].copy().loc[:, [1,2,3,4,5,6,7,8,9.10]]
+        #     tri_df = tri_df.set_index(ay)
 
-            # temp csv file
-            tri_df.to_csv('temp.csv', index=True, header=True)
+        #     # temp csv file
+        #     tri_df.to_csv('temp.csv', index=True, header=True)
             
-            triangle_objects[triangle_id] = Triangle.from_csv('temp.csv', id='paid_loss', origin_columns=1)
+        #     triangle_objects[triangle_id] = Triangle.from_csv('temp.csv', id='paid_loss', origin_columns=1)
 
-        # (3) Calculate vwa age-to-ult for each triangle
-        dataframe['vwa_age_to_ult'] = dataframe['triangle_id'].apply(lambda x: triangle_objects[x].atu('vwa'))
+        # # (3) Calculate vwa age-to-ult for each triangle
+        # dataframe['vwa_age_to_ult'] = dataframe['triangle_id'].apply(lambda x: triangle_objects[x].atu('vwa'))
 
         # Drop ay column
         dataframe = dataframe.drop('ay', axis=1)
@@ -162,22 +162,22 @@ class LossTriangleDataset(Dataset):
         data = np.stack(data, axis=0)
         labels = np.array(labels)
 
-        # (4) Add vwa_age_to_ult as an additional feature
-        vwa_age_to_ult_data = np.stack([dataframe[dataframe['triangle_id'] == triangle_id]['vwa_age_to_ult'].values for triangle_id in dataframe['triangle_id'].unique()], axis=0)
+        # # (4) Add vwa_age_to_ult as an additional feature
+        # vwa_age_to_ult_data = np.stack([dataframe[dataframe['triangle_id'] == triangle_id]['vwa_age_to_ult'].values for triangle_id in dataframe['triangle_id'].unique()], axis=0)
 
-        # Create a separate scaler for vwa_age_to_ult_data
-        vwa_scaler = StandardScaler()
+        # # Create a separate scaler for vwa_age_to_ult_data
+        # vwa_scaler = StandardScaler()
 
-        # Normalize vwa_age_to_ult_data
-        vwa_age_to_ult_data = vwa_scaler.fit_transform(vwa_age_to_ult_data)
+        # # Normalize vwa_age_to_ult_data
+        # vwa_age_to_ult_data = vwa_scaler.fit_transform(vwa_age_to_ult_data)
 
-        # Zero-padding
-        padded_vwa_age_to_ult_data = np.zeros((vwa_age_to_ult_data.shape[0], max_rows))
-        for idx, row_data in enumerate(vwa_age_to_ult_data):
-            padded_vwa_age_to_ult_data[idx, :max_rows - idx] = row_data[:max_rows - idx]
+        # # Zero-padding
+        # padded_vwa_age_to_ult_data = np.zeros((vwa_age_to_ult_data.shape[0], max_rows))
+        # for idx, row_data in enumerate(vwa_age_to_ult_data):
+        #     padded_vwa_age_to_ult_data[idx, :max_rows - idx] = row_data[:max_rows - idx]
 
-        # Add the vwa_age_to_ult_data as a new channel to the data
-        data = np.concatenate((data, np.expand_dims(padded_vwa_age_to_ult_data, axis=1)), axis=1)
+        # # Add the vwa_age_to_ult_data as a new channel to the data
+        # data = np.concatenate((data, np.expand_dims(padded_vwa_age_to_ult_data, axis=1)), axis=1)
 
         # Check if there are any "nan" or infinite values in the data and labels
         assert not np.isnan(data).any(), "Data contains 'nan' values"
